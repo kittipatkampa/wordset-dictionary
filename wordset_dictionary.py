@@ -29,6 +29,16 @@ class WordSetDictionary():
     def import_dictionary_files(self):
         self.add_dicts_to_db(self.letters)
         
+    def group_meanings_by_speech_part(self, meanings: List[dict]) -> dict:
+        meanings_by_pos = {}
+        for meaning in meanings:
+            pos = meaning['speech_part']
+            if pos not in meanings_by_pos:
+                meanings_by_pos[pos] = []
+            meanings_by_pos[pos].append(meaning)
+
+        return meanings_by_pos
+
     def get(self, word: str, speech_parts: List[str]=None, metadata: bool=False) -> dict:
         if word not in self.db:
             return {
@@ -37,20 +47,15 @@ class WordSetDictionary():
                 'hints': f'''1) Please check if you have included the letter "{word[0]}" in your database yet. If not, use method `add_dicts_to_db`.\n2) You can add a new word into `data/<letter>.json`'''
             }
 
-        payload = {}
+        # This is essentially the JSON blob of the word
         vocab = copy.deepcopy(self.db[word])
-        
-        # group meaning by pos
-        meanings_by_pos = {}
-        for meaning in vocab['meanings']:
-            pos = meaning['speech_part']
-            if pos not in meanings_by_pos:
-                meanings_by_pos[pos] = []
-            meanings_by_pos[pos].append(meaning)
+
+        meanings_by_pos = self.group_meanings_by_speech_part(vocab['meanings'])
         
         ##################################
         ### construct payload
         ##################################
+        payload = {}
         payload['wordset_id'] = vocab['wordset_id']
 
         # filter meanings by speech parts
@@ -81,21 +86,60 @@ class WordSetDictionary():
         elif len(success_speech_parts) > 0:
             payload['status'] = 1
 
-        return payload        
-        
+        return payload
+
+    def list_words(self):
+        all_words = list(self.db.keys())
+        return {
+            "words": all_words,
+        }
+
+    def count_words(self):
+        all_words = self.list_words()['words']
+        return {
+            "count": len(all_words),
+        }
+
 if __name__ == '__main__':
+    import random
+    import time
+
+    # path to the data
     data_dir = './data'
-    EngDict = WordSetDictionary(data_dir, ['a', 'b', 'c'])
-    
-    payload = EngDict.get('air')
+
+    t0 = time.time()
+    # To import only letters a, b and c for demo
+    # EngDict = WordSetDictionary(data_dir, ['a', 'b', 'c'])
+    # To import all letters there are, use this instead
+    EngDict = WordSetDictionary(data_dir)
+    print(f'Initiating dictionary takes: {int(1000*(time.time() - t0))} milliseconds')
+
+    # Show some examples
+    all_words = EngDict.list_words()["words"]
+    selected_words = []
+    for n in range(0, 5):
+        selected_words.append(
+            all_words[ random.randint(0, len(all_words)-1) ]
+            )    
+
+    print(f'''
+    There are {EngDict.count_words()["count"]} words in this dictionary.
+    Here are some examples picked randomly: {', '.join(selected_words)}
+    ''')
+
+    print('And you may be surprised by how many meanings "cat" has:')
+    payload = EngDict.get('cat')
     print(json.dumps(payload, indent=2))
 
-    payload = EngDict.get('air', speech_parts=['noun'], metadata=False)
-    print(json.dumps(payload, indent=2))
+    # payload = EngDict.get('air')
+    # print(json.dumps(payload, indent=2))
 
-    payload = EngDict.get('air', speech_parts=['gb'], metadata=True)
-    print(json.dumps(payload, indent=2))
+    # payload = EngDict.get('air', speech_parts=['noun'], metadata=False)
+    # print(json.dumps(payload, indent=2))
 
-    payload = EngDict.get('mama', speech_parts=['noun'], metadata=True)
-    print(json.dumps(payload, indent=2))
+    # payload = EngDict.get('air', speech_parts=['gb'], metadata=True)
+    # print(json.dumps(payload, indent=2))
+
+    # payload = EngDict.get('mama', speech_parts=['noun'], metadata=True)
+    # print(json.dumps(payload, indent=2))
 
